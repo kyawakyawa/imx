@@ -10,7 +10,14 @@ from rich.console import Console
 from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeRemainingColumn
 
 from imx.core.blend import collect_image_sequences, load_frame_set, parse_weights, prepare_weights, blend_images
-from imx.core.color import collect_global_minmax, colorize_image, prepare_output_files, resolve_colormap
+from imx.core.color import (
+    collect_global_minmax,
+    colorize_image,
+    colorize_random_image,
+    prepare_output_files,
+    resolve_colormap,
+    validate_color_overrides,
+)
 from imx.core.video import aligned_frame_count, build_grid_frame, codec_fourcc, collect_gif_frames, collect_sources, write_gif
 from imx.utils.files import ensure_output_dir
 from imx.utils.image_ops import save_image
@@ -106,16 +113,34 @@ def colorize(
     input: Annotated[Path, typer.Option("--input", "-i", exists=True, file_okay=False, dir_okay=True)],
     output: Annotated[Path, typer.Option("--output", "-o")] = Path("colorized"),
     cmap: Annotated[str | None, typer.Option("--cmap")] = None,
+    force_color: Annotated[
+        list[tuple[int, int, int, int]] | None,
+        typer.Option("--force-color", metavar="X R G B", help="force value X to RGB (repeatable)"),
+    ] = None,
     sort: Annotated[SortChoice, typer.Option("--sort")] = SortChoice.nat,
 ) -> None:
     file_pairs = prepare_output_files(input, output, sort_mode=sort.value)
-    min_value, max_value = collect_global_minmax([src for src, _ in file_pairs])
-    cmap_value = resolve_colormap(cmap)
+    try:
+        overrides = validate_color_overrides(force_color)
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
+
+    min_value = max_value = 0.0
+    cmap_value: int | None = None
+    if cmap is not None:
+        min_value, max_value = collect_global_minmax([src for src, _ in file_pairs])
+        try:
+            cmap_value = resolve_colormap(cmap)
+        except ValueError as error:
+            raise typer.BadParameter(str(error)) from error
 
     with progress_bar() as progress:
         task = progress.add_task("colorizing", total=len(file_pairs))
         for src, dst in file_pairs:
-            colored = colorize_image(src, min_value, max_value, cmap_value)
+            if cmap_value is None:
+                colored = colorize_random_image(src, overrides=overrides)
+            else:
+                colored = colorize_image(src, min_value, max_value, cmap_value)
             save_image(dst, colored)
             progress.advance(task)
     console.print(f"saved colorized images to: {output}")

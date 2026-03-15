@@ -17,3 +17,4 @@ def test_colorize_help() -> None:
     result = runner.invoke(app, ["colorize", "--help"])
     assert result.exit_code == 0
     assert "--cmap" in result.stdout
+    assert "--force-color" in result.stdout

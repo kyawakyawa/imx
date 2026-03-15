@@ -47,7 +47,26 @@ imx video \
 
 ### colorize
 
-単一チャンネル画像をディレクトリ全体の min/max で正規化し、擬似カラー化します。
+単一チャンネル画像をカラー化します。デフォルトでは各画素値に対して固定 seed のランダム色を割り当て、値 `0` は常に黒 `(0, 0, 0)` になります。
+
+```bash
+imx colorize \
+  -i data/grayscale \
+  -o data/colorized
+```
+
+特定の値に色を固定したい場合は `--force-color X R G B` を複数回指定できます。
+
+```bash
+imx colorize \
+  -i data/labels \
+  -o data/colorized \
+  --force-color 1 255 0 0 \
+  --force-color 2 0 255 0 \
+  --force-color 3 0 0 255
+```
+
+連続値画像を従来どおりカラーマップで可視化したい場合は `--cmap` を使います。このときはディレクトリ全体の min/max で正規化してから OpenCV のカラーマップを適用します。
 
 ```bash
 imx colorize \
