@@ -88,10 +88,25 @@ imx blend \
   --weight-mode normalize
 ```
 
+特定ディレクトリの黒 `(0, 0, 0)` を透過として扱いたい場合は、`--input` の順番に対応するフラグ列を `--black-transparent` で指定できます。`true` を指定したディレクトリでは、黒画素だけ重み計算から除外され、残りの画像で再正規化して合成します。
+
+```bash
+imx blend \
+  -i data/base \
+  -i data/mask_like \
+  -i data/highlight \
+  -w 0.5,0.3,0.2 \
+  -o data/blended \
+  --black-transparent false,true,true
+```
+
+上の例では `data/mask_like` と `data/highlight` の黒だけが透過扱いになり、`data/base` の黒はそのまま合成対象に残ります。
+
 主なオプション:
 
 - `--resize min|max|error`
 - `--weight-mode normalize|keep`
+- `--black-transparent true,false,...`: 入力ディレクトリごとに黒を透過扱いするかを指定
 
 ### gif
 

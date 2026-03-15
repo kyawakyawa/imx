@@ -9,7 +9,14 @@ import typer
 from rich.console import Console
 from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeRemainingColumn
 
-from imx.core.blend import collect_image_sequences, load_frame_set, parse_weights, prepare_weights, blend_images
+from imx.core.blend import (
+    blend_images,
+    collect_image_sequences,
+    load_frame_set,
+    parse_black_transparent_flags,
+    parse_weights,
+    prepare_weights,
+)
 from imx.core.color import (
     ColorOverride,
     collect_global_minmax,
@@ -175,13 +182,28 @@ def blend(
     sort: Annotated[SortChoice, typer.Option("--sort")] = SortChoice.nat,
     resize: Annotated[ResizeChoice, typer.Option("--resize")] = ResizeChoice.error,
     weight_mode: Annotated[WeightModeChoice, typer.Option("--weight-mode")] = WeightModeChoice.normalize,
+    black_transparent: Annotated[
+        str | None,
+        typer.Option(
+            "--black-transparent",
+            help="Comma-separated flags per input directory, e.g. true,false,true",
+        ),
+    ] = None,
 ) -> None:
     if not input:
         raise typer.BadParameter("at least one --input is required")
 
-    raw_weights = parse_weights(weights)
+    try:
+        raw_weights = parse_weights(weights)
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
     if len(raw_weights) != len(input):
         raise typer.BadParameter("number of weights must match number of input directories")
+
+    try:
+        black_transparent_flags = parse_black_transparent_flags(black_transparent, len(input))
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
 
     prepared_weights, warned = prepare_weights(raw_weights, weight_mode.value)
     if warned:
@@ -201,7 +223,7 @@ def blend(
         for index in range(frame_count):
             frame_paths = [sequence[index] for sequence in sequences]
             images = load_frame_set(frame_paths)
-            blended = blend_images(images, prepared_weights, resize.value)
+            blended = blend_images(images, prepared_weights, resize.value, black_transparent_flags)
             save_image(output / frame_paths[0].name, blended)
             progress.advance(task)
     console.print(f"saved blended images to: {output}")

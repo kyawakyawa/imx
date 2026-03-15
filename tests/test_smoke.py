@@ -18,3 +18,10 @@ def test_colorize_help() -> None:
     assert result.exit_code == 0
     assert "--cmap" in result.stdout
     assert "--force-color" in result.stdout
+
+
+def test_blend_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, ["blend", "--help"])
+    assert result.exit_code == 0
+    assert "--black-transparent" in result.stdout
