@@ -11,6 +11,7 @@ from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, T
 
 from imx.core.blend import collect_image_sequences, load_frame_set, parse_weights, prepare_weights, blend_images
 from imx.core.color import (
+    ColorOverride,
     collect_global_minmax,
     colorize_image,
     colorize_random_image,
@@ -62,6 +63,26 @@ def progress_bar() -> Progress:
     )
 
 
+def parse_force_color_args(args: list[str]) -> list[ColorOverride]:
+    overrides: list[ColorOverride] = []
+    index = 0
+    while index < len(args):
+        token = args[index]
+        if token != "--force-color":
+            raise typer.BadParameter(f"unknown extra argument: {token}")
+        if index + 4 >= len(args):
+            raise typer.BadParameter("--force-color requires 4 integers: X R G B")
+
+        values = args[index + 1 : index + 5]
+        try:
+            override = tuple(int(value) for value in values)
+        except ValueError as error:
+            raise typer.BadParameter("--force-color requires integer values") from error
+        overrides.append(override)
+        index += 5
+    return validate_color_overrides(overrides)
+
+
 @app.command()
 def video(
     input: Annotated[list[Path], typer.Option("--input", "-i", exists=True, file_okay=False, dir_okay=True)],
@@ -108,20 +129,20 @@ def video(
     console.print(f"saved video: {output}")
 
 
-@app.command()
+@app.command(
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+    help="Colorize single-channel images. Extra option: --force-color X R G B (repeatable).",
+)
 def colorize(
+    ctx: typer.Context,
     input: Annotated[Path, typer.Option("--input", "-i", exists=True, file_okay=False, dir_okay=True)],
     output: Annotated[Path, typer.Option("--output", "-o")] = Path("colorized"),
     cmap: Annotated[str | None, typer.Option("--cmap")] = None,
-    force_color: Annotated[
-        list[tuple[int, int, int, int]] | None,
-        typer.Option("--force-color", metavar="X R G B", help="force value X to RGB (repeatable)"),
-    ] = None,
     sort: Annotated[SortChoice, typer.Option("--sort")] = SortChoice.nat,
 ) -> None:
     file_pairs = prepare_output_files(input, output, sort_mode=sort.value)
     try:
-        overrides = validate_color_overrides(force_color)
+        overrides = parse_force_color_args(ctx.args)
     except ValueError as error:
         raise typer.BadParameter(str(error)) from error
 
