@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 from typer.testing import CliRunner
 
-from imx.core.color import build_random_palette, colorize_random_image
+from imx.core.color import build_random_palette, colorize_image, colorize_random_image, resolve_colormap
 from imx.main import app
 
 
@@ -68,3 +68,57 @@ def test_colorize_cli_force_color(tmp_path: Path) -> None:
     assert saved is not None
     assert tuple(int(channel) for channel in saved[0, 0]) == (0, 0, 0)
     assert tuple(int(channel) for channel in saved[0, 1]) == (30, 20, 10)
+
+
+def test_colorize_random_image_supports_uint16_grayscale(tmp_path: Path) -> None:
+    image = np.array([[0, 1], [1024, 65535]], dtype=np.uint16)
+    src = tmp_path / "labels16.png"
+    assert cv2.imwrite(str(src), image)
+
+    colored = colorize_random_image(src, overrides=[(65535, 255, 128, 0)])
+
+    assert colored.dtype == np.uint8
+    assert tuple(int(channel) for channel in colored[0, 0]) == (0, 0, 0)
+    assert tuple(int(channel) for channel in colored[1, 1]) == (0, 128, 255)
+
+
+def test_colorize_image_supports_uint16_grayscale(tmp_path: Path) -> None:
+    image = np.array([[0, 32768], [49152, 65535]], dtype=np.uint16)
+    src = tmp_path / "gradient16.png"
+    assert cv2.imwrite(str(src), image)
+
+    colored = colorize_image(src, float(image.min()), float(image.max()), resolve_colormap("viridis"))
+
+    assert colored.dtype == np.uint8
+    assert colored.shape == (2, 2, 3)
+    assert tuple(int(channel) for channel in colored[0, 0]) != tuple(int(channel) for channel in colored[1, 1])
+
+
+def test_colorize_cli_cmap_supports_uint16_grayscale(tmp_path: Path) -> None:
+    input_dir = tmp_path / "input16"
+    output_dir = tmp_path / "output16"
+    input_dir.mkdir()
+
+    image = np.array([[0, 1024], [4096, 65535]], dtype=np.uint16)
+    src = input_dir / "frame16.png"
+    assert cv2.imwrite(str(src), image)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "colorize",
+            "-i",
+            str(input_dir),
+            "-o",
+            str(output_dir),
+            "--cmap",
+            "viridis",
+        ],
+    )
+
+    assert result.exit_code == 0, result.stdout
+
+    saved = cv2.imread(str(output_dir / "frame16.png"), cv2.IMREAD_COLOR)
+    assert saved is not None
+    assert tuple(int(channel) for channel in saved[0, 0]) != tuple(int(channel) for channel in saved[1, 1])
